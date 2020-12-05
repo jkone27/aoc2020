@@ -29,7 +29,7 @@ let infiniteStringSeq stringFragment =
 //     |> Seq.map (fun x -> (x |> Seq.take 20 |> Seq.toArray))
 //     |> Seq.toList
 
-let infiniteTree (inputSequence : string seq) =
+let infiniteForest (inputSequence : string seq) =
     inputSequence
     |> Seq.map infiniteStringSeq
     |> Seq.map (fun x -> x |> Seq.take 1000)
@@ -47,7 +47,7 @@ let ``Right 3, down 1.`` x y =
     x > 0 && y % 3 = 0 && x = y/3 
 
 let findCrashesLength slopeFunction (inputSequence : string seq) =
-    infiniteTree inputSequence 
+    infiniteForest inputSequence 
     |> Seq.map (fun (x,y,spot) -> 
         if slopeFunction x y then
             match spot with
@@ -133,6 +133,6 @@ let totalNumber inputSequence =
 let test3 = sampleLines |> totalNumber //336!
 
 System.IO.File.ReadLines (__SOURCE_DIRECTORY__ + "/three.input.txt")
-|> totalNumber
+|> totalNumber //doesnt match : 1502197620L :( 
 
 
