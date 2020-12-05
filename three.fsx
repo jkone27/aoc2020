@@ -32,7 +32,7 @@ let infiniteStringSeq stringFragment =
 let infiniteTree (inputSequence : string seq) =
     inputSequence
     |> Seq.map infiniteStringSeq
-    |> Seq.map (fun x -> x |> Seq.take 5000)
+    |> Seq.map (fun x -> x |> Seq.take 1000)
     |> array2D
     |> Array2D.mapi (fun x y el -> 
         match el with
@@ -42,10 +42,14 @@ let infiniteTree (inputSequence : string seq) =
         )
     |> Seq.cast<int*int*TreeMap>
 
-let findCrashesLength (inputSequence : string seq) =
+
+let ``Right 3, down 1.`` x y =
+    x > 0 && y % 3 = 0 && x = y/3 
+
+let findCrashesLength slopeFunction (inputSequence : string seq) =
     infiniteTree inputSequence 
     |> Seq.map (fun (x,y,spot) -> 
-        if x > 0 && y % 3 = 0 && x = y/3 then
+        if slopeFunction x y then
             match spot with
             |``T🎄`` -> Some(``X🔥``)
             |``E❄️`` -> Some(``O🎿``)
@@ -73,10 +77,62 @@ let inputMap =
 let sampleLines = 
     inputMap.Split('\n')
 
-let test1 = findCrashesLength sampleLines
+let test1 =  
+    sampleLines
+    |> findCrashesLength ``Right 3, down 1.``
 
 System.IO.File.ReadLines (__SOURCE_DIRECTORY__ + "/three.input.txt")
-|> findCrashesLength
+|> findCrashesLength ``Right 3, down 1.``
 
+(*
+
+--- Part Two ---
+Time to check the rest of the slopes - 
+you need to minimize the probability of a sudden arboreal stop,
+after all.
+
+Determine the number of trees you would encounter if, 
+for each of the following slopes, 
+you start at the top-left corner and traverse the map all the way 
+to the bottom:
+
+Right 1, down 1.
+Right 3, down 1. (This is the slope you already checked.)
+Right 5, down 1.
+Right 7, down 1.
+Right 1, down 2.
+In the above example, these slopes would find 2, 7, 3, 4, 
+and 2 tree(s) respectively; multiplied together, 
+these produce the answer 336.
+
+What do you get if you multiply together the number of trees encountered 
+on each of the listed slopes?
+
+*)
+
+let SlopeFunction rightX downY x y =
+    x > downY - 1 && y % rightX = 0 && x = y/rightX
+
+let test2 =  
+    sampleLines
+    |> findCrashesLength (SlopeFunction 3 1) //7
+
+let rightDownInputArray =
+    [(1,1);(3,1);(5,1);(7,1);(1,2)]
+
+let totalNumber inputSequence = 
+    rightDownInputArray
+    |> Seq.fold (fun acc tup -> 
+        let right,down = tup
+        let crashes = 
+            inputSequence 
+            |> findCrashesLength (SlopeFunction right down)
+        ((int64)crashes * acc)    
+        ) ((int64)1)
+
+let test3 = sampleLines |> totalNumber //336!
+
+System.IO.File.ReadLines (__SOURCE_DIRECTORY__ + "/three.input.txt")
+|> totalNumber
 
 
