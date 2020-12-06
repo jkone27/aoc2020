@@ -85,54 +85,37 @@ let plane = Array.init 128 (fun i ->
     let planeColumn = Array.init 8 PlaneColumn
     PlaneRow(i, planeColumn))
 
-let binarySectionSelector upperChar lowerChar (symbol:char) (planeSection : 'c[]) =
+let binarySelector (low,high) symbol (planeSection : 'c[]) : 'c[] =
     let sectionLength = planeSection.Length - 1
-    match symbol with
-    |lowerChar ->
+    if symbol = low then
         //lower-half
         planeSection.[0..sectionLength/2]
-    |upperChar ->
+    else if symbol = high then
         //upper-half
         planeSection.[sectionLength/2+1..sectionLength]
-    |_ -> 
-        Array.Empty<_>()
+    else  
+        Array.Empty<'c>()
+
+binarySelector ('F','B') 'F' plane.[0..1]
 
 let seatStringParser inputSeatCode =
     match ParserRegex().TryTypedMatch(inputSeatCode) with
     |Some(rowInfo) ->
         rowInfo.PlaneRow.Value 
         |> Seq.fold (fun (planeSection : PlaneRow[]) symbol ->
-                let sectionLength = planeSection.Length - 1
-                match symbol with
-                |'F' ->
-                    //lower-half
-                    planeSection.[0..sectionLength/2]
-                |'B' ->
-                    //upper-half
-                    planeSection.[sectionLength/2+1..sectionLength]
-                |_ -> 
-                    Array.Empty<PlaneRow>()
-                    //no match parsing error
+                binarySelector ('F','B') symbol planeSection
             ) plane
         |> Seq.tryHead
-        |> Option.map (fun (PlaneRow(row, columns)) ->
+        |> Option.bind (fun (PlaneRow(row, columns)) ->
                 rowInfo.PlaneColumn.Value
                 |> Seq.fold (fun (colSelection: PlaneColumn[]) symbol ->
-                    let sectionLength = colSelection.Length - 1
-                    match symbol with
-                    |'L' ->
-                        //lower-half
-                        colSelection.[0..sectionLength/2]
-                    |'R' ->
-                        //upper-half
-                        colSelection.[sectionLength/2+1..sectionLength]
-                    |_ -> 
-                        Array.Empty<PlaneColumn>()
-                        //no match parsing error
+                   binarySelector ('L','R') symbol colSelection
                 ) columns
                 |> Seq.tryHead
                 |> Option.map (fun (PlaneColumn(column)) ->
-                    (row,column)
+                    //seat ID: multiply the row by 8, then add the column.
+                    let seatId = row * 8 + column
+                    (row,column,seatId)
                 )
         )
     |None -> 
@@ -140,4 +123,75 @@ let seatStringParser inputSeatCode =
 
 //So, decoding FBFBBFFRLR reveals that it is the seat at row 44, column 5.
 sampleSeat |> seatStringParser
-    
+
+(*
+BFFFBBFRRR: row 70, column 7, seat ID 567.
+FFFBBBFRRR: row 14, column 7, seat ID 119.
+BBFFBBFRLL: row 102, column 4, seat ID 820.
+*)
+[
+"BFFFBBFRRR"
+"FFFBBBFRRR"
+"BBFFBBFRLL"
+]
+|> Seq.map seatStringParser
+|> Seq.choose id
+|> Seq.maxBy(fun (row,column,seatId) -> seatId) //820
+
+//solution
+System.IO.File.ReadLines(__SOURCE_DIRECTORY__ + "/five.input.txt")
+|> Seq.map seatStringParser
+|> Seq.choose id
+|> Seq.maxBy(fun (row,column,seatId) -> seatId) //topmost seat, row 106, 855
+
+(*
+--- Part Two ---
+Ding! The "fasten seat belt" signs have turned on. Time to find your seat.
+
+It's a completely full flight, 
+so your seat should be the only missing boarding pass in your list. 
+However, there's a catch: 
+some of the seats at the very front and back of the plane 
+don't exist on this aircraft, so they'll be missing from your list as well.
+
+Your seat wasn't at the very front or back, though; 
+the seats with IDs +1 and -1 from yours will be in your list.
+
+What is the ID of your seat?
+
+*)
+
+let otherPassengerSeats =
+    System.IO.File.ReadLines(__SOURCE_DIRECTORY__ + "/five.input.txt")
+    |> Seq.map seatStringParser
+    |> Seq.choose id
+    |> Set.ofSeq
+
+let backmostSeat =
+    otherPassengerSeats
+    |> Seq.minBy (fun (row, column, seatId) -> seatId) //(10, 1, 81)
+
+let topmostSeat =
+    otherPassengerSeats
+    |> Seq.maxBy (fun (row, column, seatId) -> seatId) //(106, 7, 855)
+
+// remove nonexisting seats
+let fullPlane = 
+    plane 
+    |> Seq.collect (fun (PlaneRow(row, columns)) -> 
+        columns
+        |> Seq.map (fun (PlaneColumn(column)) ->
+            (row, column,  row * 8 + column)
+        )
+    )
+    |> Seq.skipWhile (fun (_,_,seatId) -> seatId < 81)
+    |> Seq.takeWhile (fun (_,_,seatId) -> seatId <= 855)
+    |> Set.ofSeq
+
+let mySeat =
+    Set.difference fullPlane otherPassengerSeats //552
+
+//check +-1 exist
+otherPassengerSeats |> Seq.find (fun (_,_,seatId) -> seatId = 552+1)
+
+otherPassengerSeats |> Seq.find (fun (_,_,seatId) -> seatId = 552-1)
