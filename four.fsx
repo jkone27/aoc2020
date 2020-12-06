@@ -84,9 +84,6 @@ type Height =
                 with ex ->
                     Some(Unknown(inputString))
 
-
-
-
 type PasswordId = Pid of string
 
 type CountryId = Cid of string
@@ -178,7 +175,6 @@ with static member Parse multilineString :  Result<Passport,string> =
                 |true -> Some(CountryId.Cid(cids))
                 |false -> None
 
-             
             match Height.Parse(matchesDictionary.["hgt"]) with
             |Some(h) -> 
                 let record : Passport = {   
@@ -196,7 +192,6 @@ with static member Parse multilineString :  Result<Passport,string> =
             |None -> 
                 let errorMsg = "error parsing height " + matchesDictionary.["hgt"]
                 Error(errorMsg)
-
 
 
 System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/four.sample.txt") //v,i,v,i
@@ -233,7 +228,7 @@ System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/four.input.txt") //??
 (*
 PART 2
 
-ut each other field has strict rules about what values are valid 
+But each other field has strict rules about what values are valid 
 for automatic validation:
 
 byr (Birth Year) - four digits; at least 1920 and at most 2002.
@@ -269,3 +264,196 @@ ecl invalid: wat
 pid valid:   000000001
 pid invalid: 0123456789
 *)
+
+let tryGetValue (matchesDictionary : System.Collections.Generic.IDictionary<_,_>) key =
+    let found, result = matchesDictionary.TryGetValue(key)
+    match found with
+    |true -> Some(result)
+    |false -> None
+
+
+let isAtLeast4DigitAndBetween x y (inputYearString: string) =
+    let isInt, result = Int32.TryParse(inputYearString)
+    if isInt && inputYearString.Length = 4
+        && [x..y] |> List.contains result then
+        Some(result)
+    else
+        None
+
+
+type BirthYear = Year of int
+    with static member Parse matches =
+            tryGetValue matches "byr"
+            |> Option.bind (fun inputString -> 
+                 isAtLeast4DigitAndBetween 1920 2002 inputString)
+            |> Option.map Year
+
+type IssueYear = Year of int
+     with static member Parse matches  = 
+            tryGetValue matches "iyr"
+            |> Option.bind (fun inputString -> 
+                isAtLeast4DigitAndBetween 2010 2020 inputString)
+            |> Option.map Year
+
+type ExpirationYear = Year of int
+     with static member Parse matches =
+            tryGetValue matches "eyr"
+            |> Option.bind (fun inputString -> 
+                isAtLeast4DigitAndBetween 2020 2030 inputString)
+            |> Option.map Year
+     
+ (*
+ a number followed by either cm or in:
+ If cm, the number must be at least 150 and at most 193.
+ If in, the number must be at least 59 and at most 76.
+ *)
+type Height2 =
+    |Centimiters of int
+    |Inches of int
+with static member Parse matches : Height2 option =
+        tryGetValue matches "hgt"
+        |> Option.bind (fun inputString -> 
+            if (String.IsNullOrWhiteSpace(inputString)) then
+                None
+            else
+                try
+                    let unit = inputString.[(inputString.Length-2)..]
+                    let value = (int) (inputString.Replace(unit,""))
+                    match unit with
+                    |"cm" -> 
+                        if [150..193] |> List.contains value then
+                            Some(Centimiters(value))
+                        else
+                            None
+                    |"in" -> 
+                        if [59..76] |> List.contains value then
+                            Some(Inches(value))
+                        else
+                            None
+                    |_ -> None
+                with ex ->
+                    None
+                )
+
+//a # followed by exactly six characters 0-9 or a-f.
+type HairColor = Color of string
+with static member Parse matches : HairColor option =
+        tryGetValue matches "hcl"
+        |> Option.bind (fun inputString -> 
+            if Regex.IsMatch(inputString, @"\#([a-f]|\d){6}$") then
+                Some(Color(inputString))
+            else
+                None )
+
+type ColorRange = Amb=0|Blu=1|Brn=2|Gry=3|Grn=4|Hzl=5|Oth=6
+
+//exactly one of: amb blu brn gry grn hzl oth.
+type EyeColor = Color of ColorRange
+with static member Parse matches : EyeColor option =
+        tryGetValue matches "ecl"
+        |> Option.bind (fun inputString -> 
+            let isSuccess, colorRange = Enum.TryParse<ColorRange>(inputString, true)
+            if isSuccess then
+                Some(Color(colorRange))
+            else
+                None )
+
+//pid (Passport ID) - a nine-digit number, including leading zeroes.
+type PasswordId 
+with static member Parse matches =
+        tryGetValue matches "pid"
+        |> Option.bind (fun inputString -> 
+            if Regex.IsMatch(inputString, @"^(\d){9}$") then
+                Some(Pid(inputString))
+            else
+                None )
+
+type PassportDomain = {
+    Pid : PasswordId
+    Cid : CountryId option
+    Byr: BirthYear
+    Iyr: IssueYear
+    Eyr: ExpirationYear
+    Hgt: Height2
+    Hcl : HairColor
+    Ecl : EyeColor
+}
+
+type PassportDto = {
+    Pid : PasswordId option
+    Cid : CountryId option
+    Byr: BirthYear option
+    Iyr: IssueYear option
+    Eyr: ExpirationYear option
+    Hgt: Height2 option
+    Hcl : HairColor option
+    Ecl : EyeColor option
+}
+with static member Parse multilineString :  Result<PassportDomain, PassportDto> =
+        let matchesDictionary = getMatches multilineString
+        
+        let pid = PasswordId.Parse(matchesDictionary)
+        let ecl = EyeColor.Parse(matchesDictionary)
+        let hcl = HairColor.Parse(matchesDictionary)
+        let byr = BirthYear.Parse(matchesDictionary)
+        let iyr = IssueYear.Parse(matchesDictionary)
+        let eyr = ExpirationYear.Parse(matchesDictionary)
+        let height = Height2.Parse(matchesDictionary) 
+
+        let cidOption = 
+            let found, cids = matchesDictionary.TryGetValue("cid")
+            match found with
+            |true -> Some(CountryId.Cid(cids))
+            |false -> None
+
+        let record : PassportDto = {   
+            Pid = pid
+            Cid = cidOption
+            Ecl = ecl
+            Byr = byr
+            Eyr = eyr
+            Iyr = iyr
+            Hgt = height
+            Hcl = hcl
+        }
+
+        match record with
+        | { 
+            Pid = Some(pid)
+            Ecl = Some(ecl) 
+            Byr = Some(byr)
+            Eyr = Some(eyr)
+            Iyr = Some(iyr)
+            Hgt = Some(height)
+            Hcl = Some(hcl)
+            } ->
+            let domain : PassportDomain = {   
+                Pid = pid
+                Cid = cidOption
+                Ecl = ecl
+                Byr = byr
+                Eyr = eyr
+                Iyr = iyr
+                Hgt = height
+                Hcl = hcl
+            }
+            Ok(domain)
+        |_ -> 
+            Error(record)
+
+System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/four.input.txt") //??
+    .Split([|
+        Environment.NewLine + Environment.NewLine |], 
+        StringSplitOptions.RemoveEmptyEntries)
+    |> Seq.mapi (fun i x -> i, PassportDto.Parse x)
+    |> Seq.map (fun (i,x) -> 
+        match x with
+        |Ok(passport) -> Some(passport)
+        |Error(k) -> None
+    )
+    |> Seq.choose id
+    //|> Seq.filter (fun x -> 
+    //    match x.Hgt with
+    //    |Unknown(z) -> true
+    //    |_ -> false)
+    |> Seq.length //210
