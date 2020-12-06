@@ -1,4 +1,4 @@
-(*
+﻿(*
 
 You start on the open square (.) in the top-left corner and need to reach the bottom (below the bottom-most row on your map).
 The toboggan can only follow a few specific slopes (you opted for a cheaper model that prefers rational numbers); 
@@ -17,48 +17,57 @@ type ResultPath = ``O🎿`` | ``X🔥``
 //https://stackoverflow.com/questions/32122433/is-there-a-built-in-function-for-horizontal-string-concatenation
 //could also do with bash on file and then "try" but is not "nice" :) 
 
-let infiniteStringSeq stringFragment = 
-    seq {
-        while true do 
-            for char in stringFragment do
-                yield char
-    }
 
-// "xxx.yyy".Split('.')
-//     |> Seq.map infiniteStringSeq
-//     |> Seq.map (fun x -> (x |> Seq.take 20 |> Seq.toArray))
-//     |> Seq.toList
-
-let infiniteForest (inputSequence : string seq) =
+let finiteForest (inputSequence : string seq) =
     inputSequence
-    |> Seq.map infiniteStringSeq
-    |> Seq.map (fun x -> x |> Seq.take 10000)
     |> array2D
     |> Array2D.mapi (fun x y el -> 
         match el with
-        |'.' -> x,y,``E❄️``
-        |'#' -> x,y,``T🎄``
+        |'.' -> ``E❄️``
+        |'#' -> ``T🎄``
         |_ -> failwith "parsing error"
         )
-    |> Seq.cast<int*int*TreeMap>
+
+let f =
+    """..##.......
+#...#...#..
+.#....#..#.
+..#.#...#.#
+.#...##..#.
+..#.##.....
+.#.#.#....#"""
+        .Split('\n')
+        |> finiteForest
+
+
+let infiniteForest (forest : TreeMap [,]) =
+    let forestHeight = forest |> Array2D.length1
+    let originalForestWidth = forest |> Array2D.length2
+    Seq.initInfinite id
+    |> Seq.chunkBySize (originalForestWidth * 1000) //almost infinite :)
+    |> Seq.take forestHeight
+    |> Seq.toArray
+    |> array2D
+    |> Array2D.mapi (fun x y _ -> 
+        forest.[x % forestHeight, y % originalForestWidth]
+    )
+
+let forest2 = 
+    f |> infiniteForest
 
 
 let ``Right 3, down 1.`` x y =
     x > 0 && y % 3 = 0 && x = y/3 
 
-let findCrashesLength slopeFunction (inputSequence : string seq) =
-    let forestHeight = inputSequence |> Seq.length
-    infiniteForest inputSequence 
-    |> Seq.map (fun (x,y,spot) ->
-        if (x >= forestHeight) then
-            None
+let findCrashesLength slopeFunction (forest : TreeMap [,]) =
+    forest
+    |> Array2D.mapi (fun x y spot ->
+        if slopeFunction x y then
+            match spot with
+            |``T🎄`` -> Some(``X🔥``)
+            |``E❄️`` -> Some(``O🎿``)
         else
-            if slopeFunction x y then
-                match spot with
-                |``T🎄`` -> Some(``X🔥``)
-                |``E❄️`` -> Some(``O🎿``)
-            else
-                None
+            None
     )
     |> Seq.cast<ResultPath option>
     |> Seq.choose id
@@ -84,11 +93,15 @@ let sampleLines =
 
 let test1 =  
     sampleLines
-    |> findCrashesLength  ``Right 3, down 1.`` 
+    |> finiteForest
+    |> infiniteForest
+    |> findCrashesLength  ``Right 3, down 1.``  //7
         
 
 System.IO.File.ReadLines (__SOURCE_DIRECTORY__ + "/three.input.txt")
-|> findCrashesLength ``Right 3, down 1.``
+|> finiteForest
+|> infiniteForest
+|> findCrashesLength  ``Right 3, down 1.`` //211
 
 (*
 
@@ -121,7 +134,10 @@ let SlopeFunction rightX downY x y =
 
 let test2 =  
     sampleLines
+    |> finiteForest
+    |> infiniteForest
     |> findCrashesLength (SlopeFunction 3 1) //7
+
 
 let rightDownInputArray =
     [(1,1);(3,1);(5,1);(7,1);(1,2)]
@@ -130,9 +146,12 @@ let totalNumber inputSequence =
     rightDownInputArray
     |> Seq.fold (fun acc tup -> 
         let right,down = tup
-        let crashes = 
+
+        let crashes =
             inputSequence 
-            |> findCrashesLength (SlopeFunction right down)
+            |> finiteForest
+            |> infiniteForest
+            |> findCrashesLength (SlopeFunction right down) 
             
         ((int64)crashes * acc)    
         ) ((int64)1)
@@ -144,5 +163,7 @@ System.IO.File.ReadLines (__SOURCE_DIRECTORY__ + "/three.input.txt")
 //doesnt match : 
 //6394136826 :( too big
 //should be: 3584591857
+
+
 
 
