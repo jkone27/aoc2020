@@ -116,8 +116,12 @@ on each of the listed slopes?
 
 *)
 
+//fixed by F# community thanks Kris
 let SlopeFunction rightX downY x y =
-    x > downY - 1 && y % rightX = 0 && x = y/rightX
+    if rightX >= downY then
+        y % rightX = 0 && x = y/rightX  
+    else
+        x % downY = 0 && y = x/downY  
 
 let test2 =  
     sampleLines
@@ -141,8 +145,6 @@ let test3 = sampleLines |> totalNumber //336!
 
 System.IO.File.ReadLines (__SOURCE_DIRECTORY__ + "/three.input.txt")
 |> totalNumber 
-//doesnt match : 
-//6394136826 :( too big
-//should be: 3584591857
+//3584591857L
 
 
