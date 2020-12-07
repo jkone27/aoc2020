@@ -368,17 +368,6 @@ with static member Parse matches =
             else
                 None )
 
-type PassportDomain = {
-    Pid : PasswordId
-    Cid : CountryId option
-    Byr: BirthYear
-    Iyr: IssueYear
-    Eyr: ExpirationYear
-    Hgt: Height2
-    Hcl : HairColor
-    Ecl : EyeColor
-}
-
 type PassportDto = {
     Pid : PasswordId option
     Cid : CountryId option
@@ -388,6 +377,17 @@ type PassportDto = {
     Hgt: Height2 option
     Hcl : HairColor option
     Ecl : EyeColor option
+}
+
+type PassportDomain = {
+    Pid : PasswordId
+    Cid : CountryId option
+    Byr: BirthYear
+    Iyr: IssueYear
+    Eyr: ExpirationYear
+    Hgt: Height2
+    Hcl : HairColor
+    Ecl : EyeColor
 }
 with static member Parse multilineString :  Result<PassportDomain, PassportDto> =
         let matchesDictionary = getMatches multilineString
@@ -441,11 +441,12 @@ with static member Parse multilineString :  Result<PassportDomain, PassportDto> 
         |_ -> 
             Error(record)
 
+
 System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/four.input.txt") //??
     .Split([|
         Environment.NewLine + Environment.NewLine |], 
         StringSplitOptions.RemoveEmptyEntries)
-    |> Seq.mapi (fun i x -> i, PassportDto.Parse x)
+    |> Seq.mapi (fun i x -> i, PassportDomain.Parse x)
     |> Seq.map (fun (i,x) -> 
         match x with
         |Ok(passport) -> Some(passport)
