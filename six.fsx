@@ -61,12 +61,18 @@ What is the sum of those counts?
 
 open System
 open System.IO
+open System.Text.RegularExpressions
 
 //a, b, c, x, y, and z.
 
-type Answer = A = 0 | B = 1 | C = 2 | X = 3 | Y = 4 | Z = 5 
-type PersonAnswers = { Id: int; Answers: Answer Set } //abc
-type Group = { GroupId: int; GroupAnswers : PersonAnswers Set } //a ab ca
+type Answer = Answer of char
+with static member Parse inputChar =
+        match Regex.IsMatch(new String([|inputChar|]), "^\w{1}$") with
+        |true -> Some(Answer(inputChar))
+        |false -> None
+
+type Person = { Id: int; Answers: Answer Set } //abc
+type Group = { GroupId: int; Persons : Person Set } //a ab ca
 // 26 yes-or-no  questions
 //let fullGroup = Array.init 
 
@@ -80,43 +86,110 @@ let groups (inputData : string) =
                 |> Seq.mapi (fun i (answersRaw : string) -> 
                     let answers = 
                         answersRaw
-                        |> Seq.map (fun c -> 
-                            //might need tryparse later
-                            Enum.Parse(typeof<Answer>, new String([|c|]), true) :?> Answer
-                        )
+                        |> Seq.map Answer.Parse
+                        |> Seq.choose id
                         |> Set.ofSeq
 
                     { Id = i; Answers = answers}
                 )
                 |> Set.ofSeq
-            { GroupId = g; GroupAnswers = groupAnswers}
+            { GroupId = g; Persons = groupAnswers}
         )
     |> Set.ofSeq
-    
 
-let TotalSharedAnswersInGroups inputData = //15
-    [Answer.A ; Answer.B; Answer.C; Answer.X; Answer.Y; Answer.Z]
-    |> Seq.sumBy (fun answer -> 
-        inputData
-        |> groups 
-        |> Seq.sumBy (fun g ->
-            g.GroupAnswers |>
-            Seq.sumBy (fun a ->
-                if a.Answers |> Seq.contains answer then
-                    1
-                else
-                    0
-            )
-        )
+let groupAnswersAnyoneYes group = 
+    group.Persons 
+    |> Seq.collect (fun a -> 
+        a.Answers
     )
+    |> Set.ofSeq //remove dups
+    
+let totalAnswersPerGroup selectionFunction groupSet = 
+    groupSet
+    |> Seq.map (fun g ->
+        (g.GroupId, g |> selectionFunction)
+    )
+    |> Set.ofSeq
 
 let test =
     System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/six.sample.txt")
-    |> TotalSharedAnswersInGroups //15 but should be 11
+    |> groups
+    |> totalAnswersPerGroup groupAnswersAnyoneYes
+    |> Seq.sumBy (fun (_, answers) -> answers.Count) //11
 
-       
+  
 // sol part 1
 let inputData1 =
     System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/six.input.txt")
+    |> groups
+    |> totalAnswersPerGroup groupAnswersAnyoneYes
+    |> Seq.sumBy (fun (_, answers) -> answers.Count) //6633
 
+
+(*
+
+--- Part Two ---
+As you finish the last group's customs declaration, 
+you notice that you misread one word in the instructions:
+
+You don't need to identify the questions to which anyone answered "yes"; 
+you need to identify the questions to which >>>everyone<<<< answered "yes"!
+
+Using the same example as above:
+
+abc
+
+a
+b
+c
+
+ab
+ac
+
+a
+a
+a
+a
+
+b
+This list represents answers from five groups:
+
+In the first group, everyone (all 1 person) answered "yes" to 3 questions: a, b, and c.
+In the second group, there is no question to which everyone answered "yes".
+In the third group, everyone answered yes to only 1 question, a. 
+Since some people did not answer "yes" to b or c, they don't count.
+In the fourth group, everyone answered yes to only 1 question, a.
+In the fifth group, everyone (all 1 person) answered "yes" to 1 question, b.
+In this example, the sum of these counts is 3 + 0 + 1 + 1 + 1 = 6.
+
+For each group, count the number of questions to which everyone answered "yes". 
+What is the sum of those counts?
+
+*)
+
+let groupAnswersEveryoneYes group = 
+    let allAnswersSet = 
+        ['a'..'z'] 
+        |> Seq.map Answer.Parse
+        |> Seq.choose id
+        |> Set.ofSeq
+    group.Persons 
+    |> Seq.fold (fun acc person -> 
+        person.Answers |> Set.intersect acc //intersect while folding
+    ) allAnswersSet
+    |> Set.ofSeq //remove dups
+
+let test2 =
+    System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/six.sample.txt")
+    |> groups
+    |> totalAnswersPerGroup groupAnswersEveryoneYes
+    |> Seq.sumBy (fun (_, answers) -> answers.Count) //6!
+
+
+// sol part 2
+let inputData2 =
+  System.IO.File.ReadAllText(__SOURCE_DIRECTORY__ + "/six.input.txt")
+  |> groups
+  |> totalAnswersPerGroup groupAnswersEveryoneYes
+  |> Seq.sumBy (fun (_, answers) -> answers.Count) //3202
     
