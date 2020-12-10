@@ -75,14 +75,14 @@ let extraBagRegexGlobal = ExtraBagRegex()
 type Type = Type of string
 type Color = Color of string
 
-type BagType = { Type : Type; Color: Color }
+type BagType = { Type : Type; Color: Color; }
 with static member Build (bagType,bagColor) =
-        { Type = Type(bagType); Color = Color(bagColor)}
+        { Type = Type(bagType); Color = Color(bagColor); }
 //type BagType = string * string
-type RulesDictionary = Map<BagType, (BagType * int) list>
+type RulesDictionary = Map<string * string, ((string * string) * int) list>
 
 
-let getDictionaryEntryFromLine singleLine : (BagType * (BagType * int) list) option =
+let getDictionaryEntryFromLine singleLine : ((string * string) * ((string * string) * int) list) option =
     let mo = bagRegexGlobal.TryTypedMatch(singleLine)
     match mo with
     |None -> 
@@ -90,7 +90,7 @@ let getDictionaryEntryFromLine singleLine : (BagType * (BagType * int) list) opt
     |Some(matchType) -> 
         match matchType.Success with
         |true -> 
-            Some((BagType.Build(matchType.BagType.Value, matchType.Color.Value),
+            Some(((matchType.BagType.Value, matchType.Color.Value),
                 if matchType.NoBags.Success ||  not matchType.Bags.Success then
                     []
                 else
@@ -98,7 +98,7 @@ let getDictionaryEntryFromLine singleLine : (BagType * (BagType * int) list) opt
                     |> Seq.map (extraBagRegexGlobal.TypedMatch)
                     |> Seq.filter (fun x -> x.Success)
                     |> Seq.map(fun m ->
-                        (BagType.Build(m.BagTypeNth.Value, m.ColorNth.Value), (int)m.Number.Value)
+                        ((m.BagTypeNth.Value, m.ColorNth.Value), (int)m.Number.Value)
                     )
                     |> Seq.toList
             ))
@@ -184,10 +184,6 @@ let testDictionary =
         (("dotted","black"), [ ]
         )       
     ]
-    |> List.map(fun (k,v) ->
-        BagType.Build k, 
-            v |> List.map (fun (z,c) -> BagType.Build z, c)
-        )
     |> Map.ofSeq
 
 let testParsing =
@@ -203,11 +199,12 @@ let testParsing =
 type Bag =
     | LastBag of BagType
     | BagNode of BagType * ((Bag * int) seq)
-with static member Build (rulesDictionary : RulesDictionary) bagType  =
+with static member Build (rulesDictionary : RulesDictionary) (bagType : string * string)  =
         let rec BuildBag bt (rd: RulesDictionary) acc  =
             let isSome, buildSteps = rd.TryGetValue bt
             match isSome with
             |true -> 
+                let btt = BagType.Build bt
                 match buildSteps.Length > 0  with
                 |true -> 
                     let innerBags = 
@@ -224,14 +221,14 @@ with static member Build (rulesDictionary : RulesDictionary) bagType  =
     
                     match (innerBags |> Seq.length) > 0 with
                     |true -> 
-                        Some(BagNode(bt, innerBags))
+                        Some(BagNode(btt, innerBags))
                     |false ->
-                        Some(LastBag(bt))
+                        Some(LastBag(btt))
                 |false -> 
-                    Some(LastBag(bt))
+                    Some(LastBag(btt))
             |false ->
                 acc
-        BuildBag (BagType.Build(bagType)) rulesDictionary None
+        BuildBag bagType rulesDictionary None
 
 type Bag 
 with member this.BagType =
@@ -239,22 +236,29 @@ with member this.BagType =
         |LastBag(bagType) -> bagType
         |BagNode(bagType,_) -> bagType
 
-
-let rec getInnerBagTypes (bag: Bag) : BagType list  =
+//BUG, not working correctly..
+let getAllInnerBags (bag: Bag) : BagType list  =
     let rec helper bag acc =
         match bag with
         |LastBag(_) ->
             acc
         |BagNode(_ , innerBags) ->
-            innerBags 
-            |> Seq.toList
-            |> List.collect (fun (b,_) -> 
-                helper b (b.BagType :: acc))
+            let innerBags =
+                innerBags 
+                |> Seq.toList 
+                |> List.collect (fun (b,number) ->
+                    let innerBags = 
+                        [1..number] 
+                        |> List.map (fun _ -> b.BagType)
+
+                    innerBags @ helper b innerBags
+                )
+            innerBags @ acc
     helper bag []
 
 ////15ms
 let hasInnerBag bag (bagType,bagColor) =
-    getInnerBagTypes bag
+    getAllInnerBags bag
     |> Set.ofList
     |> Set.contains(BagType.Build(bagType,bagColor))
 
@@ -307,14 +311,16 @@ let sample =
     |> Seq.map (fun x -> x.BagType)
     |> Seq.length //4!
 
-let vibrantPlumeDef = (lines |> BuildDictionary).[BagType.Build("vibrant","plum")]
+let vibrantPlumeDef = (lines |> BuildDictionary).["vibrant","plum"]
 //5 fadedblue, 6 dottedblack
 
 let vpbag =
     (Bag.Build (lines |> BuildDictionary) 
     ("vibrant","plum")).Value
 
-let vpchilds = getInnerBagTypes vpbag
+let vpchilds = 
+    getAllInnerBags vpbag
+    |> Set.ofList
 
 //-------SOLUTION part 1
 
@@ -328,7 +334,7 @@ let bigBag =
     (Bag.Build (linesSolution |> BuildDictionary) ("posh","crimson")).Value
 
 
-let nodes = getInnerBagTypes bigBag
+let nodes = getAllInnerBags bigBag
 
 //bigBagChilds 
 //|> Seq.toList
@@ -351,3 +357,92 @@ let solution =
     |> Seq.length
 
 //to Part 2
+
+(*
+
+It's getting pretty expensive to fly these days - 
+not because of ticket prices, 
+but because of the ridiculous number of bags you need to buy!
+
+Consider again your shiny gold bag and the rules from the above example:
+
+faded blue bags contain 0 other bags.
+dotted black bags contain 0 other bags.
+vibrant plum bags contain 11 other bags: 
+5 faded blue bags and 6 dotted black bags.
+dark olive bags contain 7 other bags: 
+3 faded blue bags and 4 dotted black bags.
+
+So, a single shiny gold bag must contain 
+1 dark olive bag (and the 7 bags within it) 
+plus 2 vibrant plum bags (and the 11 bags within each of those): 
+1 + 1*7 + 2 + 2*11 = 32 bags!
+
+Of course, the actual rules have a small chance 
+of going several levels deeper than this example; 
+be sure to count all of the bags, 
+even if the nesting becomes topologically impractical!
+
+Here's another example:
+
+shiny gold bags contain 2 dark red bags.
+dark red bags contain 2 dark orange bags.
+dark orange bags contain 2 dark yellow bags.
+dark yellow bags contain 2 dark green bags.
+dark green bags contain 2 dark blue bags.
+dark blue bags contain 2 dark violet bags.
+dark violet bags contain no other bags.
+
+In this example, a single shiny gold bag must contain 126 other bags.
+
+How many individual bags are required inside your single shiny gold bag?
+
+*)
+
+        
+//0ms
+let countBags bag =
+    let rec countInnerBags bb (acc : int) : int =
+        match bb with
+        |Bag.BagNode(_, innerBags) ->
+            let innerTotal = 
+                innerBags 
+                |> Seq.sumBy(fun (b,n) -> 
+                    n * countInnerBags b 1 //needs to be one as it's product neutral
+                )
+            innerTotal + acc
+        |Bag.LastBag(_) ->  
+            acc
+        
+    countInnerBags bag 0
+
+let linesTest2 =
+   """
+   shiny gold bags contain 2 dark red bags.
+   dark red bags contain 2 dark orange bags.
+   dark orange bags contain 2 dark yellow bags.
+   dark yellow bags contain 2 dark green bags.
+   dark green bags contain 2 dark blue bags.
+   dark blue bags contain 2 dark violet bags.
+   dark violet bags contain no other bags.
+   """
+    .Split([|'\n'|])
+        |> Seq.map (fun x -> x.Trim())
+        |> Seq.filter (not << String.IsNullOrWhiteSpace)
+        |> Seq.toList
+
+
+let shinyGold = 
+    (Bag.Build (linesTest2 |> BuildDictionary) ("shiny","gold")).Value
+
+let innerCount = 
+    countBags shinyGold //126!
+
+
+// solution day 2
+
+let shinyGoldSol = 
+    (Bag.Build (linesSolution |> BuildDictionary) ("shiny","gold")).Value
+    
+let sol2 =
+    countBags shinyGoldSol //155802
