@@ -33,7 +33,7 @@ let finalTest = checkIfSumIsX sample 2020
 
 //solution...
 
-let s =
+let solInput =
     [
         1899
         1358
@@ -236,6 +236,57 @@ let s =
         1857
         1723
     ]
-    |>  
-    checkIfSumIsX
-    <| 2020
+    
+solInput 
+|>  
+checkIfSumIsX
+<| 2020
+
+(*
+
+The Elves in accounting are thankful for your help; 
+one of them even offers you a starfish coin they had left over from a past vacation. 
+
+They offer you a second one if you can find 
+three numbers in your expense report that meet the same criteria.
+
+Using the above example again, 
+the three entries that sum to 2020 are 979, 366, and 675.
+
+Multiplying them together produces the answer, 241861950.
+
+In your expense report, what is the product of the three entries that sum to 2020?
+
+*)
+
+// a + b + c = sum
+//->
+// a + b = sum - c
+let rec checkIfSumIsX3 inputList sum =
+    let rec helper2 inputList sum acc = 
+        match inputList with
+        |x1::xs ->
+            let firstRes = 
+                xs 
+                |> Seq.mapi (fun i x -> i,x)
+                |> Seq.map (fun (i,next) ->
+                    xs 
+                    |> Seq.skip i
+                    |> Seq.fold (fun acc last -> 
+                        if (x1 + next + last) = sum then
+                            Some(x1, next, last, (int64)x1 * (int64)next * (int64)last)
+                        else
+                            acc
+                    ) None
+                ) 
+                |> Seq.choose id
+                |> Seq.toList
+
+            helper2 xs sum firstRes@acc
+
+        |_ -> acc
+    helper2 inputList sum []
+
+checkIfSumIsX3 sample 2020 //241861950L ok
+
+checkIfSumIsX3 solInput 2020 //32858450L
